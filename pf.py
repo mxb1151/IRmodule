@@ -15,6 +15,9 @@ from random import gauss # Kim
 import statistics 
 
 
+best_particle = []
+
+
 def noise_adder(pose):
     rot = random.uniform(0,math.pi)
     trans = random.uniform(0,3)
@@ -31,9 +34,9 @@ class PFLocaliser(PFLocaliserBase):
         
         # ----- Set motion model parameters
         
-        self.ODOM_TRANSLATION_NOISE = random.normalvariate(0,0.5) # Kim
-        self.ODOM_ROTATION_NOISE = random.normalvariate(0,0.5) # Kim
-        self.ODOM_DRIFT_NOISE = random.normalvariate(0,0.5) # Kim
+        self.ODOM_TRANSLATION_NOISE = random.normalvariate(0,0.1) # Kim
+        self.ODOM_ROTATION_NOISE = random.normalvariate(0,0.1) # Kim
+        self.ODOM_DRIFT_NOISE = random.normalvariate(0,0.1) # Kim
 
         # ----- Sensor model parameters
 
@@ -58,7 +61,7 @@ class PFLocaliser(PFLocaliserBase):
             | (geometry_msgs.msg.PoseArray) poses of the particles
         """
         
-        number_of_particles = 10000
+        number_of_particles = 5000
 
         Poses = PoseArray()
         # currentTime = rospy.Time.now()
@@ -84,6 +87,8 @@ class PFLocaliser(PFLocaliserBase):
             y = random.uniform(0,2*math.pi)
             particle_pose.orientation = rotateQuaternion(Quaternion(w=1.0),y)
             Poses.poses.append(particle_pose)
+
+        self.particlecloud = Poses
 
 
         return Poses
@@ -125,7 +130,7 @@ class PFLocaliser(PFLocaliserBase):
         # self.particlecloud = updatedCloud
         
 
-        number_of_particles = 4000
+        number_of_particles = 5000
         sum_of_weights = 0
         
         old_particle_cloud = self.particlecloud 
@@ -157,22 +162,25 @@ class PFLocaliser(PFLocaliserBase):
 
         # Draw Samples 
         S = []
-        u_j = np.array([u_1])
-        u_j = np.append(u_j,np.zeros(number_of_particles-1))
+        # u_j = np.array([u_1])
+        # u_j = np.append(u_j,np.zeros(number_of_particles-1))
+        # print(u_j[0:10])
+
 
         noise1 = 0 
         noise2 = 0 
         for j in range(number_of_particles-1):
             
-            while(u_j[j] > cummulative_df[k]):
+            while(u_1 > cummulative_df[k]):
                 k = k + 1 
             #     noise1 = random.normalvariate(0,10)
             #     noise2 = random.normalvariate(0,10)
             # old_particle_cloud.poses[k].position.x = old_particle_cloud.poses[k].position.x + noise1
             # old_particle_cloud.poses[k].position.y = old_particle_cloud.poses[k].position.y + noise2
             
-            S.append([old_particle_cloud.poses[k],u_threshold])
-            u_j[j+1] = u_j[j] + u_threshold 
+            S.append([old_particle_cloud.poses[k],u_1])
+            u_1 = u_1 + u_threshold
+            best_particle.append(k)
            
         
         # Generate particles pose with noise 
@@ -180,8 +188,8 @@ class PFLocaliser(PFLocaliserBase):
         for i in S:     
             p = i[0]
             particle_pose = Pose()
-            rnd = random.normalvariate(0,0.15)
-            rnd1 = random.normalvariate(0,0.15)
+            rnd = random.normalvariate(0,0.01)
+            rnd1 = random.normalvariate(0,0.01)
             particle_pose.position.x = p.position.x + rnd
             particle_pose.position.y = p.position.y + rnd1 
             particle_pose.position.z = p.position.z
@@ -240,17 +248,16 @@ class PFLocaliser(PFLocaliserBase):
         # est_pose.position.x = sum_x / number_of_particles
         # est_pose.position.y = sum_y / number_of_particles
         # est_pose.position.z = sum_z / number_of_particles
-        est_pose.position.x = statistics.median(x)
-        est_pose.position.y = statistics.median(y)
-        est_pose.position.z = statistics.median(z)
-        avg_heading = sum_yaw / number_of_particles
-        est_pose.orientation = rotateQuaternion(Quaternion(w=1.0),avg_heading)
+        # est_pose.position.x = statistics.median(x)
+        # est_pose.position.y = statistics.median(y)
+        # est_pose.position.z = statistics.median(z)
+        # avg_heading = sum_yaw / number_of_particles
+        # est_pose.orientation = rotateQuaternion(Quaternion(w=1.0),avg_heading)
         # est_pose.orientation.x = sum_odom_x / number_of_particles
         # est_pose.orientation.y = sum_odom_y / number_of_particles
         # est_pose.orientation.z = sum_odom_z / number_of_particles
         # est_pose.orientation.w = sum_odom_w / number_of_particles
-
-
+        est_pose = (self.particlecloud.poses[statistics.mode(best_particle)])
 
 
         return est_pose
