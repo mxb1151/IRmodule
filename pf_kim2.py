@@ -119,41 +119,17 @@ class PFLocaliser(PFLocaliserBase):
             | scan (sensor_msgs.msg.LaserScan): laser scan to use for update
 
          """
-
-
-
-
-        # weightList = []
-        # updatedCloud = PoseArray()
-        # for pose in self.particlecloud:
-        #     weight = self.sensor_model.get_weight(pose = pose,scan = scan)
-        #     weightList.append(weight)
-
-
-        # #Resampling based on weights
-
-        # cWeight = [sum(weightList[:i+1]) for i in range(len(weightList))]
-        # i = 0
-        # u = random.uniform(0,(1/1000))
-
-        # for j in range(len(self.particlecloud)):
-        #     while(u>cWeight[i]):
-        #         i = i+1
-        #     updatedCloud.poses.append(noise_adder(self.particlecloud.poses[i]))
-        #     u += 1/1000
-
-        # self.particlecloud = updatedCloud
         
 
         number_of_particles = 300
         sum_of_weights = 0
-        best_particle = []
 
         old_particle_cloud = self.particlecloud 
         new_particle_cloud = PoseArray()
 
         weights = []
         
+        # Store weights for each particle 
         for i in old_particle_cloud.poses: 
             w = self.sensor_model.get_weight(scan,i)
             sum_of_weights = sum_of_weights + w 
@@ -165,7 +141,8 @@ class PFLocaliser(PFLocaliserBase):
         weights = np.array(weights)
         partial_weights = weights / sum_of_weights 
 
-        ## Resampling Algorithms 
+
+        ############################ Resampling Algorithms #################################### 
 
 
         # Generate cdf 
@@ -179,6 +156,7 @@ class PFLocaliser(PFLocaliserBase):
         k = 0
 
 
+        # Store new particle.poses with threshold 
         S = []
         noise1 = 0 
         noise2 = 0 
@@ -194,7 +172,12 @@ class PFLocaliser(PFLocaliserBase):
             S.append([old_particle_cloud.poses[k],u_1])
             u_1 = u_1 + u_threshold
             best_particle.append(k)
-        
+
+
+
+        ###################### find densest cluster ######################################
+
+        # Store the most frequent old particle index (it will use in the third function)
         global bp_mode 
         global bp2_mode
         bp_mode, bp2_mode = most_frequent(best_particle)
@@ -207,8 +190,10 @@ class PFLocaliser(PFLocaliserBase):
         bp_y = old_particle_cloud.poses[bp_mode].position.y
         bp2_x = old_particle_cloud.poses[bp2_mode].position.x
         bp2_y = old_particle_cloud.poses[bp2_mode].position.y
-        # Generate particles pose with noise 
 
+
+
+        # Generate particles pose with noise
         for i in S:     
             p = i[0]
             particle_pose = Pose()
@@ -243,7 +228,7 @@ class PFLocaliser(PFLocaliserBase):
             | (geometry_msgs.msg.Pose) robot's estimated pose.
          """
 
-        ### Demo
+
         number_of_particles = len(self.particlecloud.poses)
         est_pose = Pose()
     
@@ -252,10 +237,14 @@ class PFLocaliser(PFLocaliserBase):
         y = []
         count = 1
 
+        # find particles inside of circle centred at the best particle position
+        # store position, orientation of particles 
+        rad1 = 0.3
+        rad2 = 0.2
         for i in self.particlecloud.poses:
             x_position = i.position.x 
             y_position = i.position.y 
-            if abs(x_position - bp_x) < 0.3 or abs(y_position - bp_y) < 0.3 :
+            if abs(x_position - bp_x) < rad1 or abs(y_position - bp_y) < rad1 :
                 x.append(x_position)
                 y.append(y_position)
                 head = getHeading(i.orientation)
@@ -263,7 +252,7 @@ class PFLocaliser(PFLocaliserBase):
                 if head < 0 :
                     head = head + math.pi*2
                     sum_head = sum_head + head 
-            elif abs(x_position - bp2_x) < 0.2 or abs(y_position - bp2_y) < 0.2 :
+            elif abs(x_position - bp2_x) < rad2 or abs(y_position - bp2_y) < rad2 :
                 x.append(x_position)
                 y.append(y_position)
                 head = getHeading(i.orientation)
@@ -273,7 +262,7 @@ class PFLocaliser(PFLocaliserBase):
                     sum_head = sum_head + head 
 
 
-
+        # get avg_position and heading 
         avg_heading = sum_head / (count-1)
         if avg_heading > math.pi:
             avg_heading = avg_heading - math.pi*2
@@ -281,10 +270,6 @@ class PFLocaliser(PFLocaliserBase):
         est_pose.position.y = statistics.median(y)
         est_pose.position.z = 0 
         est_pose.orientation = rotateQuaternion(Quaternion(w=1.0),avg_heading)
-
-        # rospy.loginfo(est_pose.position.x)
-        # rospy.loginfo(est_pose.position.y)
-        # rospy.loginfo(avg_heading)
 
         return est_pose
         
