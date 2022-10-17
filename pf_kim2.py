@@ -160,6 +160,7 @@ class PFLocaliser(PFLocaliserBase):
         S = []
         noise1 = 0 
         noise2 = 0 
+        best_particle = []
         for j in range(number_of_particles-1):
             
             while(u_1 > cummulative_df[k]):
