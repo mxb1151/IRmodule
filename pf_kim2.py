@@ -76,7 +76,7 @@ class PFLocaliser(PFLocaliserBase):
             | (geometry_msgs.msg.PoseArray) poses of the particles
         """
         
-        number_of_particles = 3000
+        number_of_particles = 1000
 
         Poses = PoseArray()
         # currentTime = rospy.Time.now()
@@ -96,8 +96,8 @@ class PFLocaliser(PFLocaliserBase):
             # particle_pose.position.y = y_hat
             # particle_pose.position.x = initialpose.pose.pose.position.x + x_hat
             # particle_pose.position.y = initialpose.pose.pose.position.y + y_hat
-            particle_pose.position.x = initialpose.pose.pose.position.x + gauss(0,3)
-            particle_pose.position.y = initialpose.pose.pose.position.y + gauss(0,3)
+            particle_pose.position.x = initialpose.pose.pose.position.x + gauss(0,2)
+            particle_pose.position.y = initialpose.pose.pose.position.y + gauss(0,2)
             particle_pose.position.z = 0 
             y = random.uniform(-math.pi,math.pi)
             particle_pose.orientation = rotateQuaternion(Quaternion(w=1.0),y)
@@ -145,7 +145,7 @@ class PFLocaliser(PFLocaliserBase):
         # self.particlecloud = updatedCloud
         
 
-        number_of_particles = 200
+        number_of_particles = 300
         sum_of_weights = 0
         best_particle = []
 
@@ -212,12 +212,12 @@ class PFLocaliser(PFLocaliserBase):
         for i in S:     
             p = i[0]
             particle_pose = Pose()
-            rnd = gauss(0,0.1)
-            rnd1 = gauss(0,0.1)
+            rnd = gauss(0,0.2)
+            rnd1 = gauss(0,0.2)
             particle_pose.position.x = p.position.x + rnd
             particle_pose.position.y = p.position.y + rnd1 
             particle_pose.position.z = p.position.z
-            y = gauss(0,0.1)
+            y = gauss(0,0.3)
             particle_odom = p.orientation
             particle_pose.orientation = rotateQuaternion(particle_odom,y)
             
@@ -263,14 +263,14 @@ class PFLocaliser(PFLocaliserBase):
                 if head < 0 :
                     head = head + math.pi*2
                     sum_head = sum_head + head 
-            # elif abs(x_position - bp2_x) < 0.05 or abs(y_position - bp2_y) < 0.05 :
-                # x.append(x_position)
-                # y.append(y_position)
-                # head = getHeading(i.orientation)
-                # count +=1
-                # if head < 0 :
-                #     head = head + math.pi*2
-                #     sum_head = sum_head + head 
+            elif abs(x_position - bp2_x) < 0.2 or abs(y_position - bp2_y) < 0.2 :
+                x.append(x_position)
+                y.append(y_position)
+                head = getHeading(i.orientation)
+                count +=1
+                if head < 0 :
+                    head = head + math.pi*2
+                    sum_head = sum_head + head 
 
 
 
@@ -282,9 +282,9 @@ class PFLocaliser(PFLocaliserBase):
         est_pose.position.z = 0 
         est_pose.orientation = rotateQuaternion(Quaternion(w=1.0),avg_heading)
 
-        rospy.loginfo(est_pose.position.x)
-        rospy.loginfo(est_pose.position.y)
-        rospy.loginfo(avg_heading)
+        # rospy.loginfo(est_pose.position.x)
+        # rospy.loginfo(est_pose.position.y)
+        # rospy.loginfo(avg_heading)
 
         return est_pose
         
