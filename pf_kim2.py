@@ -32,7 +32,7 @@ def most_frequent(List):
             counter = curr_frequency
             num = i
  
-    return num, curr_frequency
+    return num
 
 class PFLocaliser(PFLocaliserBase):
 
@@ -181,8 +181,14 @@ class PFLocaliser(PFLocaliserBase):
         # Store the most frequent old particle index (it will use in the third function)
         global bp_mode 
         global bp2_mode
-        bp_mode, bp2_mode = most_frequent(best_particle)
+        bp_mode= most_frequent(best_particle)
         
+        new_ar = []        
+        for i in best_particle:
+            if i is not bp_mode:
+                new_ar.append(i)
+
+        bp2_mode = most_frequent(new_ar)
         global bp_x 
         global bp_y
         global bp2_x
