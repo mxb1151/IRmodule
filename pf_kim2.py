@@ -15,21 +15,13 @@ from random import gauss # Kim
 import statistics 
 
 
-
-"""
-	Estimate position based on weighted resampling 
-"""
-
-
-
-
-
 bp_mode = 0
 bp2_mode = 0
 bp2_x = 0
 bp2_y = 0
 bp_x = 0 
 bp_y = 0
+flag = True
 
 def most_frequent(List):
     counter = 0
@@ -42,6 +34,15 @@ def most_frequent(List):
             num = i
  
     return num
+
+def distance(pre_p, cur_p):
+    x = pre_p.x 
+    y = pre_p.y 
+    x_hat = cur_p.x 
+    y_hat = cur_p.y 
+
+    d = math.sqrt((x-x_hat)**2 + (y-y_hat)**2)
+    return d
 
 class PFLocaliser(PFLocaliserBase):
 
@@ -88,23 +89,9 @@ class PFLocaliser(PFLocaliserBase):
         number_of_particles = 2000
 
         Poses = PoseArray()
-        # currentTime = rospy.Time.now()
 
-        # Poses.header.frame_id = "map"
-        # Poses.header.stamp = currentTime
-
-        angle = math.pi/4
-        rot_mat = np.array([[math.cos(angle),math.sin(angle)],[-math.sin(angle),math.cos(angle)]])
         for i in range(number_of_particles):
             particle_pose = Pose()
-            # x_noise = random.uniform(-15,15)
-            # y_noise = random.uniform(-9,9)
-            # origin_xy = np.array([x_noise,y_noise])
-            # [x_hat, y_hat ] = np.dot(rot_mat,origin_xy)
-            # particle_pose.position.x = x_hat
-            # particle_pose.position.y = y_hat
-            # particle_pose.position.x = initialpose.pose.pose.position.x + x_hat
-            # particle_pose.position.y = initialpose.pose.pose.position.y + y_hat
             particle_pose.position.x = initialpose.pose.pose.position.x + gauss(0,2)
             particle_pose.position.y = initialpose.pose.pose.position.y + gauss(0,2)
             particle_pose.position.z = 0 
@@ -113,6 +100,7 @@ class PFLocaliser(PFLocaliserBase):
             Poses.poses.append(particle_pose)
 
         self.particlecloud = Poses
+
 
 
         return Poses
@@ -128,9 +116,15 @@ class PFLocaliser(PFLocaliserBase):
             | scan (sensor_msgs.msg.LaserScan): laser scan to use for update
 
          """
-        
 
-        number_of_particles = 200
+        global bp_mode 
+        global bp_x
+        global bp_y 
+        global bp2_mode 
+        global bp2_x 
+        global bp2_y 
+
+        number_of_particles = 300
         sum_of_weights = 0
 
         old_particle_cloud = self.particlecloud 
@@ -171,14 +165,8 @@ class PFLocaliser(PFLocaliserBase):
         noise2 = 0 
         best_particle = []
         for j in range(number_of_particles-1):
-            
             while(u_1 > cummulative_df[k]):
                 k = k + 1 
-            #     noise1 = gauss(0,0.05)
-            #     noise2 = gauss(0,0.05)
-            # old_particle_cloud.poses[k].position.x = old_particle_cloud.poses[k].position.x + noise1
-            # old_particle_cloud.poses[k].position.y = old_particle_cloud.poses[k].position.y + noise2
-            
             S.append([old_particle_cloud.poses[k],u_1])
             u_1 = u_1 + u_threshold
             best_particle.append(k)
@@ -188,20 +176,13 @@ class PFLocaliser(PFLocaliserBase):
         ###################### find densest cluster ######################################
 
         # Store the most frequent old particle index (it will use in the third function)
-        global bp_mode 
-        global bp2_mode
-        bp_mode= most_frequent(best_particle)
-        
+        bp_mode= most_frequent(best_particle)        
         new_ar = []        
         for i in best_particle:
             if i is not bp_mode:
                 new_ar.append(i)
 
         bp2_mode = most_frequent(new_ar)
-        global bp_x 
-        global bp_y
-        global bp2_x
-        global bp2_y
         bp_x = old_particle_cloud.poses[bp_mode].position.x
         bp_y = old_particle_cloud.poses[bp_mode].position.y
         bp2_x = old_particle_cloud.poses[bp2_mode].position.x
@@ -213,8 +194,8 @@ class PFLocaliser(PFLocaliserBase):
         for i in S:     
             p = i[0]
             particle_pose = Pose()
-            rnd = gauss(0,0.2)
-            rnd1 = gauss(0,0.2)
+            rnd = gauss(0,0.15)
+            rnd1 = gauss(0,0.15)
             particle_pose.position.x = p.position.x + rnd
             particle_pose.position.y = p.position.y + rnd1 
             particle_pose.position.z = p.position.z
@@ -224,7 +205,24 @@ class PFLocaliser(PFLocaliserBase):
             
             new_particle_cloud.poses.append(particle_pose)
 
+
+        angle = math.pi/4
+        rot_mat = np.array([[math.cos(angle),math.sin(angle)],[-math.sin(angle),math.cos(angle)]])
+        for _ in range(100):
+            particle_pose = Pose()
+            x_noise = random.uniform(-14.5,14.5)
+            y_noise = random.uniform(-9,9)
+            origin_xy = np.array([x_noise,y_noise])
+            [x_hat, y_hat ] = np.dot(rot_mat,origin_xy)
+            particle_pose.position.x = x_hat
+            particle_pose.position.y = y_hat
+            y = random.uniform(-math.pi,math.pi)
+            particle_pose.orientation = rotateQuaternion(Quaternion(w=1.0),y)
+            new_particle_cloud.poses.append(particle_pose)
+            
         self.particlecloud = new_particle_cloud
+
+
 
 
     def estimate_pose(self):
@@ -247,7 +245,7 @@ class PFLocaliser(PFLocaliserBase):
 
         number_of_particles = len(self.particlecloud.poses)
         est_pose = Pose()
-    
+        
         sum_head = 0
         x = []
         y = []
