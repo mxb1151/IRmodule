@@ -15,6 +15,15 @@ from random import gauss # Kim
 import statistics 
 
 
+
+"""
+	Estimate position based on weighted resampling 
+"""
+
+
+
+
+
 bp_mode = 0
 bp2_mode = 0
 bp2_x = 0
@@ -76,7 +85,7 @@ class PFLocaliser(PFLocaliserBase):
             | (geometry_msgs.msg.PoseArray) poses of the particles
         """
         
-        number_of_particles = 1000
+        number_of_particles = 2000
 
         Poses = PoseArray()
         # currentTime = rospy.Time.now()
@@ -121,7 +130,7 @@ class PFLocaliser(PFLocaliserBase):
          """
         
 
-        number_of_particles = 300
+        number_of_particles = 200
         sum_of_weights = 0
 
         old_particle_cloud = self.particlecloud 
