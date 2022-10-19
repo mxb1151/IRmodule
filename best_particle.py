@@ -1,4 +1,4 @@
-from geometry_msgs.msg import Pose, PoseArray, Quaternion
+from geometry_msgs.msg import Pose, PoseArray, Quaternion, PoseStamped
 from . pf_base import PFLocaliserBase
 import math
 import rospy
@@ -14,6 +14,27 @@ import numpy as np  # Kim
 from random import gauss  # Kim
 import statistics
 
+#sarah 
+import threading
+from nav_msgs.msg import OccupancyGrid, Odometry
+import csv
+
+
+# open the files in the write mode
+eFile = open('estimatedpose_2.csv', 'w')
+oFile = open('odom_2.csv', 'w')
+
+# create the csv writers
+writerEfile = csv.writer(eFile)
+writerOfile = csv.writer(oFile)
+
+# write a row to the csv files
+writerEfile.writerow(["x","y","heading","time"])
+writerOfile.writerow(["x","y","heading","time"])
+
+mutex= threading.Lock()
+
+#end sarah 
 
 bp_mode = 0
 bp2_mode = 0
@@ -70,6 +91,32 @@ class PFLocaliser(PFLocaliserBase):
         sensor_model.lambda_short = 0.05
 
         self.NUMBER_PREDICTED_READINGS = 20   # Number of readings to predict
+        
+                        #--------------sara------------------------------------
+        
+        def odomAdd(data):
+        
+            if self.odom_initialised:
+                mutex.acquire(blocking=True)
+                print("----odom----")
+                writerOfile.writerow([data.pose.pose.position.x,data.pose.pose.position.y, getHeading(data.pose.pose.orientation),data.header.stamp.secs])
+                print(data.pose.pose)
+                mutex.release()
+                
+
+        
+        def estAdd(data):
+            if self.odom_initialised:
+                mutex.acquire(blocking=True)
+                print("----est----")
+                writerEfile.writerow([data.pose.position.x,data.pose.position.y ,getHeading(data.pose.orientation), rospy.Time.now().secs])
+                print(data.pose)
+                mutex.release()
+            
+        rospy.Subscriber("/odom", Odometry,odomAdd)
+        rospy.Subscriber("/estimatedpose", PoseStamped,estAdd)
+        
+        #--------------------------------------------sara------------------------------
 
     def initialise_particle_cloud(self, initialpose):
         """
@@ -201,7 +248,7 @@ class PFLocaliser(PFLocaliserBase):
         angle = math.pi/4
         rot_mat = np.array([[math.cos(angle), math.sin(angle)],
                            [-math.sin(angle), math.cos(angle)]])
-        for _ in range(100):
+        for _ in range(90):
             particle_pose = Pose()
             x_noise = random.uniform(-14.5, 14.5)
             y_noise = random.uniform(-9, 9)
@@ -238,34 +285,32 @@ class PFLocaliser(PFLocaliserBase):
         sum_head = 0
         x = []
         y = []
-        count = 1
+
 
         # find particles inside of circle centred at the best particle position
         # store position, orientation of particles
-        rad1 = 0.3
-        rad2 = 0.2
+        rad1 = 2
+        rad2 = 1
         for i in self.particlecloud.poses[:300]:
             x_position = i.position.x
             y_position = i.position.y
-            if abs(x_position - bp_x) < rad1 or abs(y_position - bp_y) < rad1:
+            if abs(x_position - bp_x) < rad1 and abs(y_position - bp_y) < rad1:
                 x.append(x_position)
                 y.append(y_position)
                 head = getHeading(i.orientation)
-                count += 1
                 if head < 0:
                     head = head + math.pi*2
                 sum_head = sum_head + head
-            elif abs(x_position - bp2_x) < rad2 or abs(y_position - bp2_y) < rad2:
+            elif abs(x_position - bp2_x) < rad2 and abs(y_position - bp2_y) < rad2:
                 x.append(x_position)
                 y.append(y_position)
                 head = getHeading(i.orientation)
-                count += 1
                 if head < 0:
                     head = head + math.pi*2
                 sum_head = sum_head + head
 
         # get avg_position and heading
-        avg_heading = sum_head / (count-1)
+        avg_heading = sum_head / (number_of_particles - 90)
         if avg_heading > math.pi:
             avg_heading = avg_heading - math.pi*2
         est_pose.position.x = statistics.median(x)

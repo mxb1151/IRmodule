@@ -21,8 +21,8 @@ import csv
 
 
 # open the files in the write mode
-eFile = open('estimatedpose_1_diff.csv', 'w')
-oFile = open('odom_1_diff.csv', 'w')
+eFile = open('estimatedpose_2.csv', 'w')
+oFile = open('odom_2.csv', 'w')
 
 # create the csv writers
 writerEfile = csv.writer(eFile)
@@ -36,9 +36,12 @@ mutex= threading.Lock()
 
 #end sarah 
 
-"""
-    Estimate position by calculating all particles 
-"""
+bp_mode = 0
+bp2_mode = 0
+bp2_x = 0
+bp2_y = 0
+bp_x = 0
+bp_y = 0
 
 
 def most_frequent(List):
@@ -52,6 +55,16 @@ def most_frequent(List):
             num = i
 
     return num
+
+
+def distance(pre_p, cur_p):
+    x = pre_p.x
+    y = pre_p.y
+    x_hat = cur_p.x
+    y_hat = cur_p.y
+
+    d = math.sqrt((x-x_hat)**2 + (y-y_hat)**2)
+    return d
 
 
 class PFLocaliser(PFLocaliserBase):
@@ -78,8 +91,8 @@ class PFLocaliser(PFLocaliserBase):
         sensor_model.lambda_short = 0.05
 
         self.NUMBER_PREDICTED_READINGS = 20   # Number of readings to predict
-
-                #--------------sara------------------------------------
+        
+                        #--------------sara------------------------------------
         
         def odomAdd(data):
         
@@ -149,6 +162,13 @@ class PFLocaliser(PFLocaliserBase):
 
          """
 
+        global bp_mode
+        global bp_x
+        global bp_y
+        global bp2_mode
+        global bp2_x
+        global bp2_y
+
         number_of_particles = 300
         sum_of_weights = 0
 
@@ -183,18 +203,37 @@ class PFLocaliser(PFLocaliserBase):
 
         # Store new particle.poses with threshold
         S = []
+        noise1 = 0
+        noise2 = 0
+        best_particle = []
         for j in range(number_of_particles-1):
             while(u_1 > cummulative_df[k]):
                 k = k + 1
             S.append([old_particle_cloud.poses[k], u_1])
             u_1 = u_1 + u_threshold
+            best_particle.append(k)
+
+        ###################### find densest cluster ######################################
+
+        # Store the most frequent old particle index (it will use in the third function)
+        bp_mode = most_frequent(best_particle)
+        new_ar = []
+        for i in best_particle:
+            if i is not bp_mode:
+                new_ar.append(i)
+
+        bp2_mode = most_frequent(new_ar)
+        bp_x = old_particle_cloud.poses[bp_mode].position.x
+        bp_y = old_particle_cloud.poses[bp_mode].position.y
+        bp2_x = old_particle_cloud.poses[bp2_mode].position.x
+        bp2_y = old_particle_cloud.poses[bp2_mode].position.y
 
         # Generate particles pose with noise
         for i in S:
             p = i[0]
             particle_pose = Pose()
-            rnd = gauss(0, 0.05)
-            rnd1 = gauss(0, 0.05)
+            rnd = gauss(0, 0.15)
+            rnd1 = gauss(0, 0.15)
             particle_pose.position.x = p.position.x + rnd
             particle_pose.position.y = p.position.y + rnd1
             particle_pose.position.z = p.position.z
@@ -203,6 +242,8 @@ class PFLocaliser(PFLocaliserBase):
             particle_pose.orientation = rotateQuaternion(particle_odom, y)
 
             new_particle_cloud.poses.append(particle_pose)
+
+        ######################## Kidnapping ################################
 
         angle = math.pi/4
         rot_mat = np.array([[math.cos(angle), math.sin(angle)],
@@ -245,23 +286,35 @@ class PFLocaliser(PFLocaliserBase):
         x = []
         y = []
 
-        # Store each particles' position and orientation
-        for i in self.particlecloud.poses:
+
+        # find particles inside of circle centred at the best particle position
+        # store position, orientation of particles
+        rad1 = 2
+        rad2 = 1
+        for i in self.particlecloud.poses[:300]:
             x_position = i.position.x
             y_position = i.position.y
-            x.append(x_position)
-            y.append(y_position)
-            head = getHeading(i.orientation)
-            if head < 0:
-                head = head + 2*math.pi
-            sum_head += head
+            if (abs(x_position - bp_x)+(y_position - bp_y))**(0.5) < rad1:
+                x.append(x_position)
+                y.append(y_position)
+                head = getHeading(i.orientation)
+                if head < 0:
+                    head = head + math.pi*2
+                sum_head = sum_head + head
+            elif (abs(x_position - bp2_x) + abs(y_position - bp2_y))**(0.5) < rad2:
+                x.append(x_position)
+                y.append(y_position)
+                head = getHeading(i.orientation)
+                if head < 0:
+                    head = head + math.pi*2
+                sum_head = sum_head + head
 
         # get avg_position and heading
-        avg_heading = sum_head / (number_of_particles-90)
+        avg_heading = sum_head / (number_of_particles - 90)
         if avg_heading > math.pi:
             avg_heading = avg_heading - math.pi*2
-        est_pose.position.x = statistics.mean(x)
-        est_pose.position.y = statistics.mean(y)
+        est_pose.position.x = statistics.median(x)
+        est_pose.position.y = statistics.median(y)
         est_pose.position.z = 0
         est_pose.orientation = rotateQuaternion(Quaternion(w=1.0), avg_heading)
 
